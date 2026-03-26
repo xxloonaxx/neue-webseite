@@ -2,12 +2,21 @@
 
 declare(strict_types=1);
 
+session_start();
+
 $baseDirectory = __DIR__;
 $mediaExtensions = [
     'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg',
     'mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac',
     'mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v',
 ];
+$defaultPasswordHash = '$2y$12$4CrnpjEP9/UynbMgOd1bcuO1RA2ByYMU5Mc6SyUNDTb1axpKYcYCa'; // BitteAendern123!
+$configuredPasswordHash = getenv('MEDIA_MANAGER_PASSWORD_HASH') ?: $defaultPasswordHash;
+
+function isAuthenticated(): bool
+{
+    return ($_SESSION['is_authenticated'] ?? false) === true;
+}
 
 function sanitizeRelativePath(string $path): string
 {
@@ -202,6 +211,65 @@ function createZipFromMedia(string $directory, array $items, string $archiveName
     exit;
 }
 
+$authError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $authAction = (string) ($_POST['auth_action'] ?? '');
+    if ($authAction === 'login') {
+        $password = (string) ($_POST['password'] ?? '');
+        if (password_verify($password, $configuredPasswordHash)) {
+            $_SESSION['is_authenticated'] = true;
+            header('Location: ' . strtok((string) $_SERVER['REQUEST_URI'], '?'));
+            exit;
+        }
+        $authError = 'Passwort ist nicht korrekt.';
+    }
+    if ($authAction === 'logout') {
+        session_unset();
+        session_destroy();
+        session_start();
+    }
+}
+
+if (!isAuthenticated()) {
+    ?>
+    <!doctype html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Login – PHP Media Datei-Manager</title>
+        <style>
+            body { font-family: Arial, sans-serif; background: #0f1320; color: #f5f7ff; margin: 0; display: grid; place-items: center; min-height: 100vh; }
+            .box { width: min(450px, 92vw); background: #1a2133; border: 1px solid #344059; border-radius: 12px; padding: 18px; }
+            h1 { margin: 0 0 8px; font-size: 1.2rem; }
+            p { color: #b7bfd8; }
+            input, button { width: 100%; background: #131a29; border: 1px solid #3a4763; color: #f5f7ff; border-radius: 8px; padding: 10px; margin-top: 8px; }
+            .error { background: #441d1d; border: 1px solid #b15b5b; border-radius: 8px; padding: 10px; color: #ffd3d3; }
+            .hint { font-size: .85rem; }
+            code { background: #11192a; padding: 2px 4px; border-radius: 4px; }
+        </style>
+    </head>
+    <body>
+    <main class="box">
+        <h1>🔒 Passwortschutz aktiv</h1>
+        <p>Bitte Passwort eingeben, um den Datei-Manager und alle Funktionen zu nutzen.</p>
+        <?php if ($authError !== ''): ?>
+            <p class="error"><?= htmlspecialchars($authError, ENT_QUOTES) ?></p>
+        <?php endif; ?>
+        <form method="post">
+            <input type="hidden" name="auth_action" value="login">
+            <label for="password">Passwort</label>
+            <input id="password" type="password" name="password" required autocomplete="current-password">
+            <button type="submit">Einloggen</button>
+        </form>
+        <p class="hint">Standard ist <code>BitteAendern123!</code>. Setze für Produktion unbedingt <code>MEDIA_MANAGER_PASSWORD_HASH</code>.</p>
+    </main>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
 $currentRelative = sanitizeRelativePath((string) ($_GET['path'] ?? ''));
 $currentDirectory = resolvePath($baseDirectory, $currentRelative);
 if ($currentDirectory === null || !is_dir($currentDirectory)) {
@@ -382,6 +450,10 @@ function queryWithout(array $removeKeys): string
 <div class="container">
     <h1>PHP Index: Datei-System für Bilder, Musik & Videos</h1>
     <p class="muted">Wichtige Funktionen: Ordnernavigation, Suche/Filter/Sortierung, Vorschau/Playback, Download, ZIP-Export, Upload, Ordner erstellen und Datei löschen.</p>
+    <form method="post" class="inline" style="margin: 0 0 12px;">
+        <input type="hidden" name="auth_action" value="logout">
+        <button type="submit">🔓 Abmelden</button>
+    </form>
 
     <?php if ($message !== ''): ?>
         <p class="message"><?= htmlspecialchars($message, ENT_QUOTES) ?></p>
