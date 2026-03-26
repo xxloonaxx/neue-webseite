@@ -10,8 +10,43 @@ $mediaExtensions = [
     'mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac',
     'mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v',
 ];
-$defaultPasswordHash = '$2y$12$4CrnpjEP9/UynbMgOd1bcuO1RA2ByYMU5Mc6SyUNDTb1axpKYcYCa'; // BitteAendern123!
-$configuredPasswordHash = getenv('MEDIA_MANAGER_PASSWORD_HASH') ?: $defaultPasswordHash;
+$defaultUsers = [
+    'nutzer1' => '$2a$12$EpIlwKfCt/IaOJ8GhCgQ1ezIUrLrnd2tcUC9stztxn/za0VfAK3qa',
+    'nutzer2' => '$2a$12$EpIlwKfCt/IaOJ8GhCgQ1ezIUrLrnd2tcUC9stztxn/za0VfAK3qa',
+    'nutzer3' => '$2a$12$EpIlwKfCt/IaOJ8GhCgQ1ezIUrLrnd2tcUC9stztxn/za0VfAK3qa',
+];
+
+/**
+ * Optional: MEDIA_MANAGER_USERS_JSON='{\"admin\":\"$2y$...\",\"editor\":\"$2y$...\"}'
+ */
+function configuredUsers(array $defaultUsers): array
+{
+    $json = getenv('MEDIA_MANAGER_USERS_JSON');
+    if (!is_string($json) || trim($json) === '') {
+        return $defaultUsers;
+    }
+
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) {
+        return $defaultUsers;
+    }
+
+    $users = [];
+    foreach ($decoded as $username => $hash) {
+        if (!is_string($username) || !is_string($hash)) {
+            continue;
+        }
+        $clean = mb_strtolower(trim($username));
+        if ($clean === '') {
+            continue;
+        }
+        $users[$clean] = trim($hash);
+    }
+
+    return $users !== [] ? $users : $defaultUsers;
+}
+
+$configuredUsers = configuredUsers($defaultUsers);
 
 function isAuthenticated(): bool
 {
@@ -215,13 +250,17 @@ $authError = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $authAction = (string) ($_POST['auth_action'] ?? '');
     if ($authAction === 'login') {
+        $username = mb_strtolower(trim((string) ($_POST['username'] ?? '')));
         $password = (string) ($_POST['password'] ?? '');
-        if (password_verify($password, $configuredPasswordHash)) {
+        $userHash = $configuredUsers[$username] ?? null;
+
+        if (is_string($userHash) && $userHash !== '' && password_verify($password, $userHash)) {
             $_SESSION['is_authenticated'] = true;
+            $_SESSION['username'] = $username;
             header('Location: ' . strtok((string) $_SERVER['REQUEST_URI'], '?'));
             exit;
         }
-        $authError = 'Passwort ist nicht korrekt.';
+        $authError = 'Benutzername oder Passwort ist nicht korrekt.';
     }
     if ($authAction === 'logout') {
         session_unset();
@@ -258,11 +297,13 @@ if (!isAuthenticated()) {
         <?php endif; ?>
         <form method="post">
             <input type="hidden" name="auth_action" value="login">
+            <label for="username">Benutzername</label>
+            <input id="username" type="text" name="username" required autocomplete="username">
             <label for="password">Passwort</label>
             <input id="password" type="password" name="password" required autocomplete="current-password">
             <button type="submit">Einloggen</button>
         </form>
-        <p class="hint">Standard ist <code>BitteAendern123!</code>. Setze für Produktion unbedingt <code>MEDIA_MANAGER_PASSWORD_HASH</code>.</p>
+        <p class="hint">Standard-Nutzer: <code>nutzer1</code>, <code>nutzer2</code>, <code>nutzer3</code>. Für Produktion per <code>MEDIA_MANAGER_USERS_JSON</code> überschreiben.</p>
     </main>
     </body>
     </html>
@@ -450,6 +491,7 @@ function queryWithout(array $removeKeys): string
 <div class="container">
     <h1>PHP Index: Datei-System für Bilder, Musik & Videos</h1>
     <p class="muted">Wichtige Funktionen: Ordnernavigation, Suche/Filter/Sortierung, Vorschau/Playback, Download, ZIP-Export, Upload, Ordner erstellen und Datei löschen.</p>
+    <p class="muted small">Angemeldet als: <strong><?= htmlspecialchars((string) ($_SESSION['username'] ?? 'unbekannt'), ENT_QUOTES) ?></strong></p>
     <form method="post" class="inline" style="margin: 0 0 12px;">
         <input type="hidden" name="auth_action" value="logout">
         <button type="submit">🔓 Abmelden</button>
