@@ -9,11 +9,11 @@ $mediaExtensions = [
     'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg',
     'mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac',
     'mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v',
+    'txt', 'md', 'html', 'htm', 'css', 'js', 'json', 'xml',
 ];
 $defaultUsers = [
-    'nutzer1' => '$2a$12$EpIlwKfCt/IaOJ8GhCgQ1ezIUrLrnd2tcUC9stztxn/za0VfAK3qa',
-    'nutzer2' => '$2a$12$EpIlwKfCt/IaOJ8GhCgQ1ezIUrLrnd2tcUC9stztxn/za0VfAK3qa',
-    'nutzer3' => '$2a$12$EpIlwKfCt/IaOJ8GhCgQ1ezIUrLrnd2tcUC9stztxn/za0VfAK3qa',
+    'loona' => '$2a$12$EpIlwKfCt/IaOJ8GhCgQ1ezIUrLrnd2tcUC9stztxn/za0VfAK3qa',
+    'soulan1001' => '$2a$13$f2hinbr.zaDjD9rgk4wPsuyw1YFyKB4xT0vsnmkuSGVli.RhFWKX.',
 ];
 
 /**
@@ -123,6 +123,7 @@ function mediaTypeFromExtension(string $extension): string
     $image = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'];
     $audio = ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'];
     $video = ['mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v'];
+    $text = ['txt', 'md', 'html', 'htm', 'css', 'js', 'json', 'xml'];
 
     if (in_array($extension, $image, true)) {
         return 'image';
@@ -133,8 +134,37 @@ function mediaTypeFromExtension(string $extension): string
     if (in_array($extension, $video, true)) {
         return 'video';
     }
+    if (in_array($extension, $text, true)) {
+        return 'text';
+    }
 
     return 'other';
+}
+
+function isEditableExtension(string $extension): bool
+{
+    return in_array($extension, ['txt', 'md', 'html', 'htm', 'css', 'js', 'json', 'xml'], true);
+}
+
+function appBaseUrl(): string
+{
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['SERVER_PORT'] ?? null) === '443');
+    $scheme = $isHttps ? 'https' : 'http';
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $scriptDir = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? ''))), '/');
+    $scriptDir = $scriptDir === '/' ? '' : $scriptDir;
+
+    return $scheme . '://' . $host . $scriptDir;
+}
+
+function buildPublicFileUrl(string $relativePath): string
+{
+    $clean = sanitizeRelativePath($relativePath);
+    $segments = $clean === '' ? [] : explode('/', $clean);
+    $encodedPath = implode('/', array_map(static fn(string $segment): string => rawurlencode($segment), $segments));
+
+    return rtrim(appBaseUrl(), '/') . '/' . $encodedPath;
 }
 
 function listDirectoryItems(string $directory, string $baseDirectory, array $mediaExtensions): array
@@ -303,7 +333,7 @@ if (!isAuthenticated()) {
             <input id="password" type="password" name="password" required autocomplete="current-password">
             <button type="submit">Einloggen</button>
         </form>
-        <p class="hint">Standard-Nutzer: <code>nutzer1</code>, <code>nutzer2</code>, <code>nutzer3</code>. Für Produktion per <code>MEDIA_MANAGER_USERS_JSON</code> überschreiben.</p>
+        <p class="hint">Standard-Nutzer: <code>loona</code> und <code>soulan1001</code>. Für Produktion per <code>MEDIA_MANAGER_USERS_JSON</code> überschreiben.</p>
     </main>
     </body>
     </html>
@@ -385,6 +415,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Datei konnte nicht gelöscht werden.';
         }
     }
+
+    if ($postAction === 'create_text_file') {
+        $newFilename = trim((string) ($_POST['new_text_filename'] ?? ''));
+        $newContent = (string) ($_POST['new_text_content'] ?? '');
+        $newFilename = basename($newFilename);
+        $ext = extensionOf($newFilename);
+
+        if ($newFilename === '') {
+            $error = 'Dateiname darf nicht leer sein.';
+        } elseif (!isEditableExtension($ext)) {
+            $error = 'Nur bearbeitbare Text-Dateien erlaubt (z. B. .txt, .html, .md).';
+        } else {
+            $target = $currentDirectory . DIRECTORY_SEPARATOR . $newFilename;
+            if (file_exists($target)) {
+                $error = 'Datei existiert bereits.';
+            } elseif (file_put_contents($target, $newContent) !== false) {
+                $message = 'Text/HTML-Datei wurde erstellt.';
+            } else {
+                $error = 'Datei konnte nicht erstellt werden.';
+            }
+        }
+    }
+
+    if ($postAction === 'save_text') {
+        $editRelative = sanitizeRelativePath((string) ($_POST['edit_file'] ?? ''));
+        $editAbsolute = resolvePath($baseDirectory, $editRelative);
+        $editContent = (string) ($_POST['edit_content'] ?? '');
+        $ext = extensionOf((string) basename($editRelative));
+
+        if ($editAbsolute === null || !is_file($editAbsolute)) {
+            $error = 'Datei zum Speichern nicht gefunden.';
+        } elseif (!isEditableExtension($ext)) {
+            $error = 'Dateityp ist nicht als Text/HTML bearbeitbar freigegeben.';
+        } elseif (file_put_contents($editAbsolute, $editContent) !== false) {
+            $message = 'Datei wurde gespeichert.';
+        } else {
+            $error = 'Datei konnte nicht gespeichert werden.';
+        }
+    }
 }
 
 $search = mb_strtolower(trim((string) ($_GET['search'] ?? '')));
@@ -440,6 +509,10 @@ $currentPreview = sanitizeRelativePath((string) ($_GET['preview'] ?? ''));
 $previewAbsolute = $currentPreview !== '' ? resolvePath($baseDirectory, $currentPreview) : null;
 $previewExists = $previewAbsolute !== null && is_file($previewAbsolute);
 $previewType = $previewExists ? mediaTypeFromExtension(extensionOf((string) basename($previewAbsolute))) : 'other';
+$previewContent = '';
+if ($previewExists && $previewType === 'text') {
+    $previewContent = (string) file_get_contents($previewAbsolute);
+}
 
 function queryWithout(array $removeKeys): string
 {
@@ -516,6 +589,7 @@ function queryWithout(array $removeKeys): string
                         <option value="image" <?= $typeFilter === 'image' ? 'selected' : '' ?>>Bilder</option>
                         <option value="audio" <?= $typeFilter === 'audio' ? 'selected' : '' ?>>Audio</option>
                         <option value="video" <?= $typeFilter === 'video' ? 'selected' : '' ?>>Video</option>
+                        <option value="text" <?= $typeFilter === 'text' ? 'selected' : '' ?>>Text / HTML</option>
                     </select>
                     <select name="sort">
                         <option value="name" <?= $sortBy === 'name' ? 'selected' : '' ?>>Name</option>
@@ -552,8 +626,14 @@ function queryWithout(array $removeKeys): string
 
                     <form method="post" enctype="multipart/form-data" class="inline">
                         <input type="hidden" name="post_action" value="upload_file">
-                        <input type="file" name="upload_media" accept="image/*,audio/*,video/*">
+                        <input type="file" name="upload_media" accept="image/*,audio/*,video/*,.txt,.md,.html,.htm,.css,.js,.json,.xml">
                         <button type="submit">Datei hochladen</button>
+                    </form>
+
+                    <form method="post" class="inline">
+                        <input type="hidden" name="post_action" value="create_text_file">
+                        <input type="text" name="new_text_filename" placeholder="neu.html oder notes.txt">
+                        <button type="submit">Text/HTML anlegen</button>
                     </form>
                 </div>
 
@@ -576,9 +656,11 @@ function queryWithout(array $removeKeys): string
                                 <?php if ($item['kind'] === 'directory'): ?>
                                     <a class="btn" href="?path=<?= urlencode((string) $item['relativePath']) ?>">Öffnen</a>
                                 <?php else: ?>
+                                    <?php $directUrl = buildPublicFileUrl((string) $item['relativePath']); ?>
                                     <a class="btn" href="?path=<?= urlencode($currentRelative) ?>&preview=<?= urlencode((string) $item['relativePath']) ?>&<?= queryWithout(['preview']) ?>">Vorschau</a>
-                                    <a class="btn" href="?action=view&file=<?= urlencode((string) $item['relativePath']) ?>" target="_blank">Direkt öffnen</a>
+                                    <a class="btn" href="<?= htmlspecialchars($directUrl, ENT_QUOTES) ?>" target="_blank">Direkt URL öffnen</a>
                                     <a class="btn" href="?action=download&file=<?= urlencode((string) $item['relativePath']) ?>">Download</a>
+                                    <input class="small" type="text" readonly value="<?= htmlspecialchars($directUrl, ENT_QUOTES) ?>" style="max-width:240px;">
                                     <form method="post" class="inline" onsubmit="return confirm('Datei wirklich löschen?');">
                                         <input type="hidden" name="post_action" value="delete_file">
                                         <input type="hidden" name="delete_file" value="<?= htmlspecialchars((string) $item['relativePath'], ENT_QUOTES) ?>">
@@ -602,6 +684,8 @@ function queryWithout(array $removeKeys): string
                         <audio controls autoplay src="?action=view&file=<?= urlencode($currentPreview) ?>"></audio>
                     <?php elseif ($previewExists && $previewType === 'video'): ?>
                         <video controls autoplay src="?action=view&file=<?= urlencode($currentPreview) ?>"></video>
+                    <?php elseif ($previewExists && $previewType === 'text'): ?>
+                        <pre style="white-space: pre-wrap; width: 100%; max-height: 60vh; overflow:auto; margin:0;"><?= htmlspecialchars($previewContent, ENT_QUOTES) ?></pre>
                     <?php else: ?>
                         <p class="muted">Datei für Vorschau auswählen.</p>
                     <?php endif; ?>
@@ -613,6 +697,20 @@ function queryWithout(array $removeKeys): string
                         Kein Medium ausgewählt.
                     <?php endif; ?>
                 </p>
+                <?php if ($previewExists): ?>
+                    <p class="meta small">Direkt-URL: <a href="<?= htmlspecialchars(buildPublicFileUrl($currentPreview), ENT_QUOTES) ?>" target="_blank"><?= htmlspecialchars(buildPublicFileUrl($currentPreview), ENT_QUOTES) ?></a></p>
+                <?php endif; ?>
+                <?php if ($previewExists && $previewType === 'text'): ?>
+                    <form method="post">
+                        <input type="hidden" name="post_action" value="save_text">
+                        <input type="hidden" name="edit_file" value="<?= htmlspecialchars($currentPreview, ENT_QUOTES) ?>">
+                        <label for="edit_content">Editor (TXT / HTML / Code)</label>
+                        <textarea id="edit_content" name="edit_content" style="width:100%; min-height:220px; background:#101726; color:#e8eeff; border:1px solid #415172; border-radius:8px; padding:10px;"><?= htmlspecialchars($previewContent, ENT_QUOTES) ?></textarea>
+                        <div style="margin-top:8px;">
+                            <button type="submit">Datei speichern</button>
+                        </div>
+                    </form>
+                <?php endif; ?>
                 <p class="muted small">
                     Sicherheit: Alle Pfade werden serverseitig normalisiert und auf das Projektverzeichnis begrenzt.
                 </p>
