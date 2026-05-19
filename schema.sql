@@ -1,0 +1,35 @@
+CREATE TABLE IF NOT EXISTS months (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  goal DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY months_name_unique (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS entries (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  month_id INT UNSIGNED NOT NULL,
+  type ENUM('income', 'expense') NOT NULL,
+  entry_date DATE NOT NULL,
+  name VARCHAR(180) NOT NULL,
+  category VARCHAR(120) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  status ENUM('planned', 'paid', 'recurring') NOT NULL DEFAULT 'planned',
+  note TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX entries_month_date_idx (month_id, entry_date),
+  INDEX entries_category_idx (category),
+  CONSTRAINT entries_month_fk FOREIGN KEY (month_id) REFERENCES months(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS category_budgets (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  month_id INT UNSIGNED NOT NULL,
+  category VARCHAR(120) NOT NULL,
+  limit_amount DECIMAL(12,2) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY category_budget_unique (month_id, category),
+  CONSTRAINT category_budgets_month_fk FOREIGN KEY (month_id) REFERENCES months(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
