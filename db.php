@@ -250,14 +250,17 @@ final class BudgetDatabase
 
     private function entryParameters(int $monthId, array $entry): array
     {
+        $rawStatus = (string) ($entry['status'] ?? 'planned');
+        $status = in_array($rawStatus, ['planned', 'paid', 'recurring'], true) ? $rawStatus : 'planned';
+
         return [
             'month_id' => $monthId,
-            'type' => $entry['type'] === 'income' ? 'income' : 'expense',
+            'type' => ($entry['type'] ?? 'expense') === 'income' ? 'income' : 'expense',
             'entry_date' => $entry['date'] ?? date('Y-m-d'),
             'name' => trim((string) ($entry['name'] ?? 'Neue Buchung')),
             'category' => trim((string) ($entry['category'] ?? 'Sonstiges')),
             'amount' => max(0, (float) ($entry['amount'] ?? 0)),
-            'status' => in_array(($entry['status'] ?? 'planned'), ['planned', 'paid', 'recurring'], true) ? $entry['status'] : 'planned',
+            'status' => $status,
             'note' => trim((string) ($entry['note'] ?? '')),
         ];
     }
