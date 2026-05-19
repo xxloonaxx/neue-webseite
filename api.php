@@ -51,8 +51,17 @@ function readJsonPayload(): array
         return [];
     }
 
-    $raw = file_get_contents('php://input') ?: '';
-    $payload = json_decode($raw, true);
+    $raw = trim((string) (file_get_contents('php://input') ?: ''));
+    if ($raw == '') {
+        return [];
+    }
+
+    try {
+        $payload = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+    } catch (JsonException) {
+        throw new RuntimeException('JSON Payload ist ungültig.');
+    }
+
     if (!is_array($payload)) {
         throw new RuntimeException('JSON Payload ist ungültig.');
     }
