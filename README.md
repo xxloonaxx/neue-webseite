@@ -65,3 +65,19 @@ Danach die Seite unter `http://127.0.0.1:8000/index.php` öffnen.
 - JSON-Export des aktiven Monats.
 - Schnellvorlagen für Miete und Gehalt im Eingabeformular.
 - Jahresübersicht über alle Monats-Tabs (Einnahmen/Ausgaben/Saldo).
+
+
+## CSV-Template
+
+Als Platzhalter/Startvorlage liegt eine fertige CSV-Datei im Repo:
+
+- `budget-template.csv`
+
+Spaltenreihenfolge für Import:
+
+`Typ;Datum;Beschreibung;Kategorie;Status;Notiz;Betrag`
+
+Erlaubte Werte:
+
+- `Typ`: `income` oder `expense`
+- `Status`: `planned`, `paid`, `recurring`

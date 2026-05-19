@@ -1,0 +1,6 @@
+Typ;Datum;Beschreibung;Kategorie;Status;Notiz;Betrag
+income;2026-01-01;Gehalt;Gehalt;paid;Monatliches Netto;3200.00
+expense;2026-01-03;Miete;Wohnen;recurring;Warmmiete;980.00
+expense;2026-01-05;Supermarkt;Lebensmittel;paid;Wocheneinkauf;185.40
+expense;2026-01-10;ÖPNV;Transport;recurring;Deutschlandticket;49.00
+expense;2026-01-15;Sparrate;Sparen;planned;ETF Sparplan;450.00
